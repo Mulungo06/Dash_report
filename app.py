@@ -11,39 +11,6 @@ from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_PARAGRAPH_ALIGNMENT
 from io import BytesIO
 
-# Função final para formatar códigos como 'IRAS200682025' em 'S2/0068'
-import re
-def formatar_codigo_site(codigo):
-    """
-    Converte códigos como 'IRAS200682025' em 'S2/0068'
-    - IRA (fixo)
-    - S<site> → representado pelo primeiro dígito após 'IRA'
-    - <código paciente> → 4 dígitos seguintes
-    - Últimos 4 dígitos (ano) → ignorados
-    """
-        if isinstance(codigo, str):
-        match = re.match(r'IRA\S?(\d)(\d{4})\d{4}$', codigo)
-        if match:
-            site = match.group(1)
-            codigo_paciente = match.group(2)
-            if 1 <= int(site) <= 6:
-                return f"S{site}/{codigo_paciente}"
-    return codigo
-
-
-        match = re.match(r'IRA(\d{2})(\d{4})\d{4}$', codigo)
-        if match:
-            site_raw = match.group(1)
-            site_num = int(site_raw[-1])  # último dígito representa S1–S6
-            if 1 <= site_num <= 6:
-                paciente_id = match.group(2)
-                return f"S{site_num}/{paciente_id.zfill(4)}"
-    return codigo
-
-
-    return codigo
-
-
 # Caminho para a imagem do emblema (o logo do INS foi removido)
 EMBLEM_PATH = "Emblem_of_Mozambique.svg.png"
 
@@ -153,7 +120,7 @@ def carregar_dados(uploaded_file):
         df[resultado_sars_col] = df[resultado_sars_col].fillna("-").astype(str).str.upper()
         
         df_limpo = pd.DataFrame({
-            "Código": df["Código do Site"].astype(str).str.strip().apply(formatar_codigo_site),
+            "Código": df["Código do Site"].astype(str).str.strip(),
             "Sexo": df["Sexo"].astype(str).str.upper(),
             "Idade": df["Idade"].astype(str),
             "Residência/Bairro": df["Residência/Bairro"].astype(str).fillna("Não especificado"),
