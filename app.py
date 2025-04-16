@@ -11,17 +11,26 @@ from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_PARAGRAPH_ALIGNMENT
 from io import BytesIO
 
-# Função final para formatar códigos como 'IRAS201292025' em 'S2/0129'
+# Função final para formatar códigos como 'IRAS200682025' em 'S2/0068'
 import re
 def formatar_codigo_site(codigo):
     """
-    Transforma códigos como 'IRAS201292025' em 'S2/0129'
-    - '20' → site 2
-    - '129' → código paciente
-    - '2025' → ignorado
-    Só aceita sites de S1 a S6.
+    Converte códigos como 'IRAS200682025' em 'S2/0068'
+    - IRA (fixo)
+    - S<site> → representado pelo primeiro dígito após 'IRA'
+    - <código paciente> → 4 dígitos seguintes
+    - Últimos 4 dígitos (ano) → ignorados
     """
     if isinstance(codigo, str):
+        match = re.match(r'IRA\S?(\d)(\d{4})\d{4}$', codigo)
+        if match:
+            site = match.group(1)
+            codigo_paciente = match.group(2)
+            if 1 <= int(site) <= 6:
+                return f"S{site}/{codigo_paciente}"
+    return codigo
+
+
         match = re.match(r'IRAS(\d{2})(\d{3})\d{4}$', codigo)
         if match:
             site_raw = match.group(1)
