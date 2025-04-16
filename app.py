@@ -21,7 +21,7 @@ def formatar_codigo_site(codigo):
     - <código paciente> → 4 dígitos seguintes
     - Últimos 4 dígitos (ano) → ignorados
     """
-    if isinstance(codigo, str):
+        if isinstance(codigo, str):
         match = re.match(r'IRA\S?(\d)(\d{4})\d{4}$', codigo)
         if match:
             site = match.group(1)
