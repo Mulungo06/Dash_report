@@ -31,7 +31,7 @@ def formatar_codigo_site(codigo):
     return codigo
 
 
-        match = re.match(r'IRAS(\d{2})(\d{3})\d{4}$', codigo)
+        match = re.match(r'IRA(\d{2})(\d{4})\d{4}$', codigo)
         if match:
             site_raw = match.group(1)
             site_num = int(site_raw[-1])  # último dígito representa S1–S6
