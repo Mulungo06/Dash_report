@@ -11,16 +11,27 @@ from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_PARAGRAPH_ALIGNMENT
 from io import BytesIO
 
-# Função para formatar o código do site no formato: S<num>/<id>
+# Função final para formatar códigos como 'IRAS201292025' em 'S2/0129'
 import re
 def formatar_codigo_site(codigo):
+    """
+    Transforma códigos como 'IRAS201292025' em 'S2/0129'
+    - '20' → site 2
+    - '129' → código paciente
+    - '2025' → ignorado
+    Só aceita sites de S1 a S6.
+    """
     if isinstance(codigo, str):
-        match = re.match(r'(IRAS|IDS)?(\d{3,4})(20\d{2})?', codigo)
+        match = re.match(r'IRAS(\d{2})(\d{3})\d{4}$', codigo)
         if match:
-            numero = match.group(2)
-            site_num = int(numero[:2]) if len(numero) >= 2 else int(numero)
-            paciente_id = numero[-2:] if len(numero) >= 4 else numero.zfill(4)
-            return f"S{site_num}/{paciente_id.zfill(4)}"
+            site_raw = match.group(1)
+            site_num = int(site_raw[-1])  # último dígito representa S1–S6
+            if 1 <= site_num <= 6:
+                paciente_id = match.group(2)
+                return f"S{site_num}/{paciente_id.zfill(4)}"
+    return codigo
+
+
     return codigo
 
 
@@ -427,7 +438,7 @@ def main():
         if df is not None:
             st.success("Dados carregados com sucesso!")
             
-            st.header("2. Filtro de Período (Data de Entrada)")
+            st.header("2. Filtro de Período (Data da Colheita)")
             col1, col2 = st.columns(2)
             with col1:
                 data_inicio = st.date_input("Data inicial", date(2025, 3, 24))
