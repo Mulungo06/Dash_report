@@ -427,7 +427,7 @@ def main():
         if df is not None:
             st.success("Dados carregados com sucesso!")
             
-            st.header("2. Filtro de Período (Data da Colheita)")
+            st.header("2. Filtro de Período (Data de Entrada)")
             col1, col2 = st.columns(2)
             with col1:
                 data_inicio = st.date_input("Data inicial", date(2025, 3, 24))
