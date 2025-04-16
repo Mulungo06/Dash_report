@@ -11,6 +11,19 @@ from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_PARAGRAPH_ALIGNMENT
 from io import BytesIO
 
+# Função para formatar o código do site no formato: S<num>/<id>
+import re
+def formatar_codigo_site(codigo):
+    if isinstance(codigo, str):
+        match = re.match(r'(IRAS|IDS)?(\d{3,4})(20\d{2})?', codigo)
+        if match:
+            numero = match.group(2)
+            site_num = int(numero[:2]) if len(numero) >= 2 else int(numero)
+            paciente_id = numero[-2:] if len(numero) >= 4 else numero.zfill(4)
+            return f"S{site_num}/{paciente_id.zfill(4)}"
+    return codigo
+
+
 # Caminho para a imagem do emblema (o logo do INS foi removido)
 EMBLEM_PATH = "Emblem_of_Mozambique.svg.png"
 
@@ -120,7 +133,7 @@ def carregar_dados(uploaded_file):
         df[resultado_sars_col] = df[resultado_sars_col].fillna("-").astype(str).str.upper()
         
         df_limpo = pd.DataFrame({
-            "Código": df["Código do Site"].astype(str).str.strip(),
+            "Código": df["Código do Site"].astype(str).str.strip().apply(formatar_codigo_site),
             "Sexo": df["Sexo"].astype(str).str.upper(),
             "Idade": df["Idade"].astype(str),
             "Residência/Bairro": df["Residência/Bairro"].astype(str).fillna("Não especificado"),
