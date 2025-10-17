@@ -107,7 +107,7 @@ def carregar_dados(uploaded_file):
         df['Data de entrada'] = pd.to_datetime(df['Data de entrada'], errors='coerce')
 
         # ✅ NOVO: converte colunas opcionais de testagem, caso existam
-        for col in ["Data de Testagem SARS", "Data da Testagem FLU", "Data da Testagem RSV"]:
+        for col in ["Data de Testagem SARS", "Data da Testagem FLU", "Data da Testagem RSV", "Data da Testagem"]:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
 
@@ -116,11 +116,27 @@ def carregar_dados(uploaded_file):
         # Cria a coluna Influenza utilizando os subtipos (detalhamento somente para resumo)
         df['Influenza'] = df.apply(classificar_influenza_subtipos, axis=1)
         
+        # --- NOVO: flags de Influenza A e B por CT < 40 ---
+        def ct_pos(v):
+            try:
+                return float(v) < 40
+            except:
+                return False
+
+        fluA_cols = ["InfA", "Apdm", "H1pdm", "H3", "H5", "H5a", "H5b", "H7"]
+        fluB_cols = ["InfB", "Vic", "Yam"]
+        for c in fluA_cols + fluB_cols:
+            if c not in df.columns:
+                df[c] = None
+
+        df["FluA_Pos"] = df[fluA_cols].apply(lambda r: any(ct_pos(x) for x in r), axis=1)
+        df["FluB_Pos"] = df[fluB_cols].apply(lambda r: any(ct_pos(x) for x in r), axis=1)
+
         # Trata RSV
         df['Resultado RSV'] = df['Resultado RSV'].fillna("-").astype(str).str.upper()
         
         # Para SARS-CoV-2, utiliza a primeira coluna encontrada dentre as possíveis
-        colunas_sars = ["Resultado SARS", "Resultado Sars-Cov-2"]
+        colunas_sars = ["Resultado SARS", "Resultado Sars-Cov-2", "Resultado  SARS"]
         resultado_sars_col = next((col for col in colunas_sars if col in df.columns), None)
         if not resultado_sars_col:
             raise ValueError("Coluna de resultado SARS-CoV-2 não encontrada.")
@@ -134,15 +150,18 @@ def carregar_dados(uploaded_file):
             "Data da Colheita": df["Data da Colheita"],
             "Data de entrada": df["Data de entrada"],
             "Tipo de Amostra": "Nasofaríngeo",
+            # Na tabela, para Influenza, usaremos apenas "POSITIVO"/"NEGATIVO"
             "Influenza": df["Influenza"],
             "RSV": df["Resultado RSV"],
             "SARS-CoV-2": df[resultado_sars_col]
         })
 
-        # ✅ Mantém também as colunas opcionais de data, se existirem
-        for col in ["Data de Testagem SARS", "Data da Testagem FLU", "Data da Testagem RSV"]:
+        # ✅ Preservar, se existirem
+        for col in ["Data de Testagem SARS", "Data da Testagem FLU", "Data da Testagem RSV", "Data da Testagem"]:
             if col in df.columns:
                 df_limpo[col] = df[col]
+        df_limpo["FluA_Pos"] = df["FluA_Pos"]
+        df_limpo["FluB_Pos"] = df["FluB_Pos"]
 
         if df_limpo.empty:
             raise ValueError("Nenhum dado válido encontrado após processamento.")
@@ -205,8 +224,8 @@ def gerar_resumo_dinamico(df_atual, df_anterior, periodo_atual_str, periodo_ante
             # Para Influenza, conta positivos por subtipo usando os detalhes (que estão no formato "POSITIVO: A(H3N2), B(Victoria)" )
             influ_counts = {}
             for val in df_unit["Influenza"]:
-                if "POSITIVO:" in val.upper():
-                    subtypes_str = val.split(":", 1)[1].strip()
+                if "POSITIVO:" in str(val).upper():
+                    subtypes_str = str(val).split(":", 1)[1].strip()
                     if subtypes_str:
                         subs = [s.strip() for s in subtypes_str.split(",")]
                         for s in subs:
@@ -397,7 +416,6 @@ def gerar_relatorio(df_atual, df_anterior, periodo_atual_str, periodo_anterior_s
     p_resumo = doc.add_paragraph(resumo_texto)
     p_resumo.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
 
-
      # Tabelas por unidade sanitária
     df_atual_sem_data_entrada = df_atual.drop(columns=["Data de entrada"], errors="ignore")
     doc = criar_tabelas_unidades_sanitarias(doc, df_atual_sem_data_entrada)
@@ -433,8 +451,7 @@ def main():
                     "Data de Testagem SARS",
                     "Data da Testagem FLU",
                     "Data da Testagem RSV",
-                    "Data da Colheita",
-                    "Data de entrada"
+                    "Data da Colheita"
                 ],
                 index=3  # por padrão "Data da Colheita"
             )
@@ -462,7 +479,7 @@ def main():
             df_anterior = df.loc[mask_anterior].copy()
 
             periodo_anterior_str = f"{data_inicio_prev.strftime('%d/%m/%Y')} a {data_fim_prev.strftime('%d/%m/%Y')}"
-            st.write(f"Foram encontrados {len(df_anterior)} registros no período anterior ({periodo_anterior_str}) (baseado em **{coluna_filtro}**).")
+            st.write(f"Foram encontrados {len[df_anterior]} registros no período anterior ({periodo_anterior_str}) (baseado em **{coluna_filtro}**).")
             
             nome_usuario = st.text_input("Nome do Gerador", "Mulungo06")
             data_emissao = st.text_input("Data de Emissão", datetime.now().strftime("%d/%m/%Y"))
@@ -478,6 +495,177 @@ def main():
             
             st.header("3. Visualização dos Dados (Filtrado)")
             st.dataframe(df_atual)
+
+            # =========================
+            # 4. Positividade ao longo do período (por dia)
+            # =========================
+            st.header("4. Positividade diária por vírus (no período selecionado)")
+
+            # Usar a mesma coluna escolhida no filtro como eixo temporal
+            eixo_tempo = coluna_filtro if coluna_filtro in df_atual.columns else "Data da Colheita"
+            df_ts = df_atual.copy()
+            df_ts["_data"] = pd.to_datetime(df_ts[eixo_tempo], errors="coerce")
+            df_ts = df_ts.dropna(subset=["_data"])
+
+            # Marcadores binários de positividade
+            df_ts["RSV_Pos"] = df_ts["RSV"].astype(str).str.upper().eq("POSITIVO")
+            df_ts["SARS_Pos"] = df_ts["SARS-CoV-2"].astype(str).str.upper().eq("POSITIVO")
+            # Influenza (qualquer): já tens "Influenza" com "POSITIVO: ..."; usamos contains
+            df_ts["Influenza_Pos"] = df_ts["Influenza"].astype(str).str.upper().str.contains("POSITIVO")
+
+            # Influenza A/B dos flags novos (se existirem); caso não, infere a partir de "Influenza" (fallback)
+            if "FluA_Pos" not in df_ts.columns:
+                df_ts["FluA_Pos"] = df_ts["Influenza"].astype(str).str.contains(r"A\(", case=False, regex=True)
+            if "FluB_Pos" not in df_ts.columns:
+                df_ts["FluB_Pos"] = df_ts["Influenza"].astype(str).str.contains(r"\bB\b|\(Victoria\)|\(Yamagata\)", case=False, regex=True)
+
+            # Agregar por dia
+            grp = df_ts.groupby(df_ts["_data"].dt.date)
+            ts = pd.DataFrame({
+                "n_testadas": grp.size()
+            })
+            for col, name in [
+                ("FluA_Pos", "Pos_FluA"),
+                ("FluB_Pos", "Pos_FluB"),
+                ("RSV_Pos", "Pos_RSV"),
+                ("SARS_Pos", "Pos_SARS")
+            ]:
+                ts[name] = grp[col].sum()
+
+            # Positividade (%)
+            for name in ["Pos_FluA", "Pos_FluB", "Pos_RSV", "Pos_SARS"]:
+                ts[name.replace("Pos_", "Pct_")] = (ts[name] / ts["n_testadas"] * 100).round(2)
+
+            st.subheader("Positividade (%)")
+            st.line_chart(ts[["Pct_FluA", "Pct_FluB", "Pct_RSV", "Pct_SARS"]])
+
+            with st.expander("Ver tabela diária (contagens e percentuais)"):
+                st.dataframe(ts.reset_index(names="Data"))
+
+            # =========================
+            # 5. Positividade por faixa etária
+            # =========================
+            st.header("5. Positividade por faixa etária")
+
+            def to_age_num(x):
+                v = extrair_valor_idade(x)
+                return v if v is not None else float("nan")
+
+            def faixa_etaria(a):
+                # Faixas definidas por ti
+                if pd.isna(a): return "Idade não informada"
+                if a < 2: return "0-2"
+                if a < 5: return "2-5"
+                if a < 15: return "5-15"
+                if a < 50: return "15-50"
+                if a < 65: return "50-65"
+                return "65+"
+
+            df_age = df_atual.copy()
+            df_age["Idade_num"] = df_age["Idade"].apply(to_age_num)
+            df_age["Faixa"] = df_age["Idade_num"].apply(faixa_etaria)
+
+            df_age["RSV_Pos"] = df_age["RSV"].astype(str).str.upper().eq("POSITIVO")
+            df_age["SARS_Pos"] = df_age["SARS-CoV-2"].astype(str).str.upper().eq("POSITIVO")
+            df_age["Influenza_Pos"] = df_age["Influenza"].astype(str).str.upper().str.contains("POSITIVO")
+
+            if "FluA_Pos" not in df_age.columns:
+                df_age["FluA_Pos"] = df_age["Influenza"].astype(str).str.contains(r"A\(", case=False, regex=True)
+            if "FluB_Pos" not in df_age.columns:
+                df_age["FluB_Pos"] = df_age["Influenza"].astype(str).str.contains(r"\bB\b|\(Victoria\)|\(Yamagata\)", case=False, regex=True)
+
+            ag = df_age.groupby("Faixa").agg(
+                n=("Faixa", "size"),
+                FluA_Pos=("FluA_Pos", "sum"),
+                FluB_Pos=("FluB_Pos", "sum"),
+                RSV_Pos=("RSV_Pos", "sum"),
+                SARS_Pos=("SARS_Pos", "sum")
+            ).reset_index()
+
+            for v in ["FluA_Pos", "FluB_Pos", "RSV_Pos", "SARS_Pos"]:
+                ag[v.replace("_Pos", "_Pct")] = (ag[v] / ag["n"] * 100).round(2)
+
+            st.subheader("Tabela de positividade por faixa etária (%)")
+            st.dataframe(
+                ag[["Faixa", "n", "FluA_Pct", "FluB_Pct", "RSV_Pct", "SARS_Pct"]]
+                .sort_values("Faixa")
+            )
+
+            st.subheader("Gráfico (positividade % por faixa)")
+            st.bar_chart(
+                ag.set_index("Faixa")[["FluA_Pct", "FluB_Pct", "RSV_Pct", "SARS_Pct"]]
+                .sort_index()
+            )
+
+            # =========================
+            # 6. Mapa por Distrito (opcional)
+            # =========================
+            st.header("6. Mapa de distribuição por distrito (opcional)")
+            st.caption("Carrega um ficheiro GeoJSON de Moçambique com a propriedade 'Distrito' (ex.: limites distritais).")
+
+            geojson_file = st.file_uploader("GeoJSON de Distritos", type=["geojson", "json"], key="geojson_distritos")
+
+            # Contagens por potencial distrito (se existir essa coluna); caso contrário, uso Província/Bairro como fallback
+            candidato_distrito = None
+            for cand in ["Distrito", "Distrito/Concelho", "Concelho", "Residência/Bairro"]:
+                if cand in df_atual.columns:
+                    candidato_distrito = cand
+                    break
+
+            if geojson_file is not None and candidato_distrito is not None:
+                import json, numpy as np, pydeck as pdk
+
+                gj = json.load(geojson_file)
+                contagem = (df_atual.groupby(candidato_distrito)
+                            .size().reset_index(name="casos"))
+
+                # Projecta contagens para as features do geojson via chave 'Distrito'
+                for feat in gj.get("features", []):
+                    nome = None
+                    # tenta em ordem de propriedades comuns
+                    for k in ["Distrito", "district", "name", "NAME_2", "NAME_3", "ADM2_PT", "ADM2_PCODE"]:
+                        if "properties" in feat and k in feat["properties"]:
+                            nome = str(feat["properties"][k]).strip()
+                            break
+                    # matching simples (casefold)
+                    casos = int(contagem.loc[
+                        contagem[candidato_distrito].astype(str).str.casefold() == str(nome).casefold(),
+                        "casos"
+                    ].sum()) if nome is not None else 0
+                    feat.setdefault("properties", {})["casos"] = casos
+
+                st.subheader("Choropleth de casos por distrito")
+                layer = pdk.Layer(
+                    "GeoJsonLayer",
+                    gj,
+                    opacity=0.6,
+                    stroked=True,
+                    get_line_color=[0, 0, 0],
+                    get_fill_color="[" 
+                                   "min(255, properties.casos * 12), "
+                                   "min(255, properties.casos * 6), "
+                                   "160]"
+                )
+                view_state = pdk.ViewState(latitude=-18.9, longitude=35.3, zoom=4.2)  # Moçambique
+                st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state))
+                with st.expander("Ver tabela de contagens por distrito"):
+                    st.dataframe(contagem.sort_values("casos", ascending=False))
+            else:
+                st.info("Sem GeoJSON ou coluna de distrito — a mostrar distribuição tabular/gráfica por Província e por Bairro.")
+                if "Província" in df_atual.columns:
+                    cnt_prov = df_atual["Província"].value_counts().rename_axis("Província").reset_index(name="Casos")
+                    st.subheader("Casos por Província")
+                    st.bar_chart(cnt_prov.set_index("Província"))
+                    st.dataframe(cnt_prov)
+                if "Residência/Bairro" in df_atual.columns:
+                    cnt_bairro = (df_atual["Residência/Bairro"]
+                                  .value_counts()
+                                  .head(25)
+                                  .rename_axis("Residência/Bairro")
+                                  .reset_index(name="Casos"))
+                    st.subheader("Top 25 Bairros por número de casos")
+                    st.bar_chart(cnt_bairro.set_index("Residência/Bairro"))
+                    st.dataframe(cnt_bairro)
 
 if __name__ == "__main__":
     main()
