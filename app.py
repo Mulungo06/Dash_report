@@ -479,7 +479,8 @@ def main():
             df_anterior = df.loc[mask_anterior].copy()
 
             periodo_anterior_str = f"{data_inicio_prev.strftime('%d/%m/%Y')} a {data_fim_prev.strftime('%d/%m/%Y')}"
-            st.write(f"Foram encontrados {len[df_anterior]} registros no período anterior ({periodo_anterior_str}) (baseado em **{coluna_filtro}**).")
+            st.write(f"Foram encontrados {len(df_anterior)} registros no período anterior ({periodo_anterior_str}) (baseado em **{coluna_filtro}**).")
+
             
             nome_usuario = st.text_input("Nome do Gerador", "Mulungo06")
             data_emissao = st.text_input("Data de Emissão", datetime.now().strftime("%d/%m/%Y"))
