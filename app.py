@@ -414,25 +414,19 @@ def main():
         if df is not None:
             st.success("Dados carregados com sucesso!")
             
-            # ================= NOVO: Escolha do tipo de data para filtrar =================
+            # ================= NOVO: Escolha fixa do tipo de data =================
             st.header("2. Filtro de Período (Escolha o tipo de data)")
-            # Lista de possíveis colunas de datas (somente as que existirem no DF)
-            possiveis_datas = [
-                "Data de Testagem SARS",
-                "Data da Testagem FLU",
-                "Data da Testagem RSV",
-                "Data da Colheita"
-            ]
-            opcoes_datas = [c for c in possiveis_datas if c in df.columns]
-            # Garante que haja pelo menos uma opção; se não houver, usa "Data da Colheita" que é carregada acima
-            if not opcoes_datas:
-                opcoes_datas = ["Data da Colheita"]
             coluna_filtro = st.selectbox(
-                "Escolha a coluna de data a utilizar no filtro",
-                options=opcoes_datas,
-                index=opcoes_datas.index("Data da Colheita") if "Data da Colheita" in opcoes_datas else 0
+                "Selecione o tipo de data para aplicar o filtro",
+                options=[
+                    "Data de Testagem SARS",
+                    "Data da Testagem FLU",
+                    "Data da Testagem RSV",
+                    "Data da Colheita"
+                ],
+                index=3  # por padrão "Data da Colheita"
             )
-            # ==============================================================================
+            # ======================================================================
 
             col1, col2 = st.columns(2)
             with col1:
@@ -440,20 +434,18 @@ def main():
             with col2:
                 data_fim = st.date_input("Data final", date(2025, 3, 28))
             
-            # --------- NOVO: Filtra os dados usando a coluna escolhida ---------
+            # Filtra os dados conforme a coluna selecionada
             df_tmp = df.copy()
-            df_tmp["_dtFiltro"] = pd.to_datetime(df_tmp[coluna_filtro], errors="coerce")
+            df_tmp["_dtFiltro"] = pd.to_datetime(df_tmp.get(coluna_filtro), errors="coerce")
             mask_atual = (df_tmp["_dtFiltro"] >= pd.to_datetime(data_inicio)) & (df_tmp["_dtFiltro"] <= pd.to_datetime(data_fim))
             df_atual = df.loc[mask_atual].copy()
-            # -------------------------------------------------------------------
 
             periodo_atual_str = f"{data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
             st.write(f"Foram encontrados {len(df_atual)} registros no período selecionado (baseado em **{coluna_filtro}**).")
             
-            # Calcula o período da semana anterior (usando a mesma coluna escolhida)
+            # Semana anterior
             data_inicio_prev = data_inicio - timedelta(days=7)
             data_fim_prev = data_fim - timedelta(days=7)
-
             mask_anterior = (df_tmp["_dtFiltro"] >= pd.to_datetime(data_inicio_prev)) & (df_tmp["_dtFiltro"] <= pd.to_datetime(data_fim_prev))
             df_anterior = df.loc[mask_anterior].copy()
 
