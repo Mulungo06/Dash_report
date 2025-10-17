@@ -102,8 +102,15 @@ def carregar_dados(uploaded_file):
         if colunas_faltantes:
             raise ValueError(f"Colunas obrigatórias faltando: {', '.join(colunas_faltantes)}")
         
+        # Conversão de colunas principais em datetime
         df['Data da Colheita'] = pd.to_datetime(df['Data da Colheita'], errors='coerce')
         df['Data de entrada'] = pd.to_datetime(df['Data de entrada'], errors='coerce')
+
+        # ✅ NOVO: converte colunas opcionais de testagem, caso existam
+        for col in ["Data de Testagem SARS", "Data da Testagem FLU", "Data da Testagem RSV"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+
         df['Idade_Num'] = df['Idade'].apply(extrair_valor_idade)
         
         # Cria a coluna Influenza utilizando os subtipos (detalhamento somente para resumo)
@@ -127,12 +134,16 @@ def carregar_dados(uploaded_file):
             "Data da Colheita": df["Data da Colheita"],
             "Data de entrada": df["Data de entrada"],
             "Tipo de Amostra": "Nasofaríngeo",
-            # Na tabela, para Influenza, usaremos apenas "POSITIVO"/"NEGATIVO"
             "Influenza": df["Influenza"],
             "RSV": df["Resultado RSV"],
             "SARS-CoV-2": df[resultado_sars_col]
         })
-        
+
+        # ✅ Mantém também as colunas opcionais de data, se existirem
+        for col in ["Data de Testagem SARS", "Data da Testagem FLU", "Data da Testagem RSV"]:
+            if col in df.columns:
+                df_limpo[col] = df[col]
+
         if df_limpo.empty:
             raise ValueError("Nenhum dado válido encontrado após processamento.")
         return df_limpo
@@ -422,7 +433,8 @@ def main():
                     "Data de Testagem SARS",
                     "Data da Testagem FLU",
                     "Data da Testagem RSV",
-                    "Data da Colheita"
+                    "Data da Colheita",
+                    "Data de entrada"
                 ],
                 index=3  # por padrão "Data da Colheita"
             )
