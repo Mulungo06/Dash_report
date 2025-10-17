@@ -414,30 +414,51 @@ def main():
         if df is not None:
             st.success("Dados carregados com sucesso!")
             
-            st.header("2. Filtro de Período (Data de Entrada)")
+            # ================= NOVO: Escolha do tipo de data para filtrar =================
+            st.header("2. Filtro de Período (Escolha o tipo de data)")
+            # Lista de possíveis colunas de datas (somente as que existirem no DF)
+            possiveis_datas = [
+                "Data de Testagem SARS",
+                "Data da Testagem FLU",
+                "Data da Testagem RSV",
+                "Data da Colheita"
+            ]
+            opcoes_datas = [c for c in possiveis_datas if c in df.columns]
+            # Garante que haja pelo menos uma opção; se não houver, usa "Data da Colheita" que é carregada acima
+            if not opcoes_datas:
+                opcoes_datas = ["Data da Colheita"]
+            coluna_filtro = st.selectbox(
+                "Escolha a coluna de data a utilizar no filtro",
+                options=opcoes_datas,
+                index=opcoes_datas.index("Data da Colheita") if "Data da Colheita" in opcoes_datas else 0
+            )
+            # ==============================================================================
+
             col1, col2 = st.columns(2)
             with col1:
                 data_inicio = st.date_input("Data inicial", date(2025, 3, 24))
             with col2:
                 data_fim = st.date_input("Data final", date(2025, 3, 28))
             
-            # Filtra os dados para o período atual
-            df_atual = df[
-                (df["Data de entrada"] >= pd.to_datetime(data_inicio)) &
-                (df["Data de entrada"] <= pd.to_datetime(data_fim))
-            ].copy()
+            # --------- NOVO: Filtra os dados usando a coluna escolhida ---------
+            df_tmp = df.copy()
+            df_tmp["_dtFiltro"] = pd.to_datetime(df_tmp[coluna_filtro], errors="coerce")
+            mask_atual = (df_tmp["_dtFiltro"] >= pd.to_datetime(data_inicio)) & (df_tmp["_dtFiltro"] <= pd.to_datetime(data_fim))
+            df_atual = df.loc[mask_atual].copy()
+            # -------------------------------------------------------------------
+
             periodo_atual_str = f"{data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
-            st.write(f"Foram encontrados {len(df_atual)} registros no período selecionado.")
+            st.write(f"Foram encontrados {len(df_atual)} registros no período selecionado (baseado em **{coluna_filtro}**).")
             
-            # Calcula o período da semana anterior
+            # Calcula o período da semana anterior (usando a mesma coluna escolhida)
             data_inicio_prev = data_inicio - timedelta(days=7)
             data_fim_prev = data_fim - timedelta(days=7)
-            df_anterior = df[
-                (df["Data de entrada"] >= pd.to_datetime(data_inicio_prev)) &
-                (df["Data de entrada"] <= pd.to_datetime(data_fim_prev))
-            ].copy()
+
+            mask_anterior = (df_tmp["_dtFiltro"] >= pd.to_datetime(data_inicio_prev)) & (df_tmp["_dtFiltro"] <= pd.to_datetime(data_fim_prev))
+            df_anterior = df.loc[mask_anterior].copy()
+
             periodo_anterior_str = f"{data_inicio_prev.strftime('%d/%m/%Y')} a {data_fim_prev.strftime('%d/%m/%Y')}"
-            st.write(f"Foram encontrados {len(df_anterior)} registros no período anterior ({periodo_anterior_str}).")
+            st.write(f"Foram encontrados {len(df_anterior)} registros no período anterior ({periodo_anterior_str}) (baseado em **{coluna_filtro}**).")
             
             nome_usuario = st.text_input("Nome do Gerador", "Mulungo06")
             data_emissao = st.text_input("Data de Emissão", datetime.now().strftime("%d/%m/%Y"))
@@ -456,4 +477,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
